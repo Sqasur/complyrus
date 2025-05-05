@@ -54,10 +54,9 @@ const organizationSchema = new mongoose.Schema(
       },
     },
     settings: {
-      complianceProgramsEnabled: {
-        type: [String],
-        default: [],
-      },
+      complianceProgramsEnabled: [
+        { type: mongoose.Schema.Types.ObjectId, ref: "ComplianceProgram" },
+      ],
       dataRetentionPeriod: {
         type: Number,
         default: 365, // days
