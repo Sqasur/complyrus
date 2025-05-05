@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 
-export const verifyJWT = asyncHandler(async (req, _, next) => {
+const verifyJWT = asyncHandler(async (req, _, next) => {
   try {
     const token =
       req.cookies?.accessToken ||
@@ -29,3 +29,32 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     throw new ApiError(401, error?.message || "Invalid access token");
   }
 });
+
+const checkRoles = (requiredRoles, scope = "org") => {
+  return asyncHandler((req, res, next) => {
+    // Check if the user is a site admin
+    if (req.user.isSiteAdmin) {
+      return next(); // Site admin bypasses all role checks
+    }
+
+    // Otherwise, check roles in the specified scope
+    const roles =
+      scope === "org"
+        ? req.user.activeOrgRoles || [] // Organization roles
+        : req.user.activeTeamRoles || []; // Team roles
+
+    // Check if the user has at least one of the required roles
+    const hasAccess = requiredRoles.some((role) => roles.includes(role));
+
+    if (!hasAccess) {
+      throw new ApiError(
+        403,
+        `You need one of the following roles to access this resource: ${requiredRoles.join(", ")}`
+      );
+    }
+
+    next(); // Proceed to the next middleware or controller
+  });
+};
+
+export { verifyJWT, checkRoles };

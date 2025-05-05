@@ -4,10 +4,21 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
-const generateAccessAndRefreshTokens = async (userId) => {
+const generateAccessAndRefreshTokens = async (
+  userId,
+  activeOrgId,
+  activeOrgRoles,
+  activeTeamId,
+  activeTeamRoles
+) => {
   try {
     const user = await User.findById(userId);
-    const accessToken = user.generateAccessToken();
+    const accessToken = user.generateAccessToken(
+      activeOrgId,
+      activeOrgRoles,
+      activeTeamId,
+      activeTeamRoles
+    );
     const refreshToken = user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
@@ -22,6 +33,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
     );
   }
 };
+
 const registerUser = asyncHandler(async (req, res) => {
   console.log("Request body:", req.body);
 
@@ -200,4 +212,60 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const switchOrganization = asyncHandler(async (req, res) => {
+  const { orgId, teamId } = req.body;
+  const userId = req.user._id;
+
+  const user = await User.findById(userId).populate(
+    "organizationMemberships.organizationId organizationMemberships.teams.teamId"
+  );
+
+  const orgMembership = user.organizationMemberships.find(
+    (membership) => membership.organizationId._id.toString() === orgId
+  );
+
+  if (!orgMembership) {
+    throw new ApiError(403, "Access denied to the specified organization");
+  }
+
+  const activeOrgRoles = orgMembership.roles || [];
+
+  let activeTeamRoles = [];
+  if (teamId) {
+    const teamMembership = orgMembership.teams.find(
+      (team) => team.teamId._id.toString() === teamId
+    );
+
+    if (!teamMembership) {
+      throw new ApiError(403, "Access denied to the specified team");
+    }
+
+    activeTeamRoles = teamMembership.role ? [teamMembership.role] : [];
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    userId,
+    orgId,
+    activeOrgRoles,
+    teamId,
+    activeTeamRoles
+  );
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken },
+        "Switched organization and updated tokens successfully"
+      )
+    );
+});
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refreshAccessToken,
+  switchOrganization,
+};

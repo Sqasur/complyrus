@@ -57,8 +57,15 @@ const userSchema = new Schema(
         ],
         teams: [
           {
-            type: Schema.Types.ObjectId,
-            ref: "Team",
+            teamId: {
+              type: Schema.Types.ObjectId,
+              ref: "Team",
+            },
+            role: {
+              type: String,
+              enum: ["teamLeader", "employee"],
+              default: "employee",
+            },
           },
         ],
       },
@@ -74,6 +81,10 @@ const userSchema = new Schema(
     refreshToken: {
       type: String,
     },
+    isSiteAdmin: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
@@ -88,12 +99,19 @@ userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
-userSchema.methods.generateAccessToken = function () {
+userSchema.methods.generateAccessToken = function (
+  activeOrgId,
+  activeOrgRoles,
+  activeTeamId,
+  activeTeamRoles
+) {
   return jwt.sign(
     {
       _id: this._id,
-      username: this.username,
-      email: this.email,
+      org: activeOrgId,
+      oroles: activeOrgRoles,
+      team: activeTeamId,
+      troles: activeTeamRoles,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
@@ -105,7 +123,7 @@ userSchema.methods.generateAccessToken = function () {
 userSchema.methods.generateRefreshToken = function () {
   return jwt.sign(
     {
-      _id: this._id,
+      sub: this._id,
     },
     process.env.REFRESH_TOKEN_SECRET,
     {
@@ -113,4 +131,5 @@ userSchema.methods.generateRefreshToken = function () {
     }
   );
 };
+
 export const User = mongoose.model("User", userSchema);
