@@ -57,4 +57,30 @@ const checkRoles = (requiredRoles, scope = "org") => {
   });
 };
 
-export { verifyJWT, checkRoles };
+const checkOrgRoles = (requiredRoles) => {
+  return asyncHandler((req, res, next) => {
+    const orgId = req.params.orgId || req.body.orgId;
+
+    const membership = req.user.organizationMemberships.find(
+      (m) => m.organizationId.toString() === orgId
+    );
+
+    if (!membership) {
+      throw new ApiError(403, "Access denied to the specified organization");
+    }
+
+    const hasAccess = requiredRoles.some((role) =>
+      membership.roles.includes(role)
+    );
+    if (!hasAccess) {
+      throw new ApiError(
+        403,
+        `You need one of the following roles to access this resource: ${requiredRoles.join(", ")}`
+      );
+    }
+
+    next();
+  });
+};
+
+export { verifyJWT, checkRoles, checkOrgRoles };
