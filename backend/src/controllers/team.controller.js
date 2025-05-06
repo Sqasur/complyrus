@@ -161,3 +161,151 @@ export const makeTeamLeader = asyncHandler(async (req, res) => {
       new ApiResponse(200, {}, "User promoted to team leader successfully")
     );
 });
+
+// Update team details
+export const updateTeamDetails = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+  const updates = req.body;
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  Object.assign(team, updates);
+  await team.save();
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, team, "Team details updated successfully"));
+});
+
+// Fetch all teams in an organization
+export const fetchAllTeamsInOrganization = asyncHandler(async (req, res) => {
+  const { orgId } = req.params;
+
+  const teams = await Team.find({ organizationId: orgId });
+  res
+    .status(200)
+    .json(new ApiResponse(200, teams, "Teams fetched successfully"));
+});
+
+// Fetch team members
+export const fetchTeamMembers = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+
+  const team = await Team.findById(teamId).populate("members.userId");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  res
+    .status(200)
+    .json(
+      new ApiResponse(200, team.members, "Team members fetched successfully")
+    );
+});
+
+// Assign multiple users to a team
+export const assignMultipleUsersToTeam = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+  const { users } = req.body; // users: [{ userId, role }]
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  users.forEach(({ userId, role }) => {
+    const isAlreadyMember = team.members.some(
+      (member) => member.userId.toString() === userId
+    );
+    if (!isAlreadyMember) {
+      team.members.push({ userId, role });
+    }
+  });
+
+  await team.save();
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Users assigned to team successfully"));
+});
+
+// Remove multiple users from a team
+export const removeMultipleUsersFromTeam = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+  const { userIds } = req.body; // userIds: [userId1, userId2, ...]
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  team.members = team.members.filter(
+    (member) => !userIds.includes(member.userId.toString())
+  );
+
+  await team.save();
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Users removed from team successfully"));
+});
+
+// Transfer team leadership
+export const transferTeamLeadership = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+  const { newLeaderId } = req.body;
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const currentLeader = team.members.find(
+    (member) => member.role === "teamLeader"
+  );
+  const newLeader = team.members.find(
+    (member) => member.userId.toString() === newLeaderId
+  );
+
+  if (!newLeader) {
+    throw new ApiError(404, "New leader is not a member of the team");
+  }
+
+  if (currentLeader) {
+    currentLeader.role = "employee";
+  }
+  newLeader.role = "teamLeader";
+
+  await team.save();
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Team leadership transferred successfully"));
+});
+
+// Delete a team
+export const deleteTeam = asyncHandler(async (req, res) => {
+  const { teamId } = req.params;
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  await team.remove();
+  res.status(200).json(new ApiResponse(200, {}, "Team deleted successfully"));
+});
+
+// Fetch teams for a user
+export const fetchTeamsForUser = asyncHandler(async (req, res) => {
+  const { orgId, userId } = req.params;
+
+  const teams = await Team.find({
+    organizationId: orgId,
+    "members.userId": userId,
+  });
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, teams, "User's teams fetched successfully"));
+});

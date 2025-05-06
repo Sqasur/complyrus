@@ -13,8 +13,12 @@ app.use(cookieParser());
 
 // Import routes
 import userRouter from "./routes/user.routes.js";
+import organizationRouter from "./routes/organization.routes.js";
+import teamRouter from "./routes/team.routes.js";
 
 // Use routes
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/", organizationRouter);
+app.use("/api/v1/", teamRouter);
 
 export { app };

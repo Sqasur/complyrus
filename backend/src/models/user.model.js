@@ -85,6 +85,13 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    siteLevelRoles: [
+      {
+        type: String,
+        enum: ["siteAdmin", "siteModerator", "siteUser"], // Define roles as needed
+        default: "siteUser",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -112,6 +119,7 @@ userSchema.methods.generateAccessToken = function (
       oroles: activeOrgRoles,
       team: activeTeamId,
       troles: activeTeamRoles,
+      sroles: this.siteLevelRoles, // Include siteLevelRoles in the token
     },
     process.env.ACCESS_TOKEN_SECRET,
     {

@@ -30,26 +30,39 @@ const verifyJWT = asyncHandler(async (req, _, next) => {
   }
 });
 
-const checkRoles = (requiredRoles, scope = "org") => {
+const checkRoles = (requiredRolesByScope) => {
   return asyncHandler((req, res, next) => {
-    // Check if the user is a site admin
+    // Check if the user is a site admin (bypass for all scopes)
     if (req.user.isSiteAdmin) {
       return next(); // Site admin bypasses all role checks
     }
 
-    // Otherwise, check roles in the specified scope
-    const roles =
-      scope === "org"
-        ? req.user.activeOrgRoles || [] // Organization roles
-        : req.user.activeTeamRoles || []; // Team roles
+    // Extract roles for each scope
+    const orgRoles = req.user.activeOrgRoles || []; // Organization roles
+    const teamRoles = req.user.activeTeamRoles || []; // Team roles
+    const siteRoles = req.user.siteLevelRoles || []; // Site-level roles
 
-    // Check if the user has at least one of the required roles
-    const hasAccess = requiredRoles.some((role) => roles.includes(role));
+    // Check roles for each scope
+    const hasOrgAccess = requiredRolesByScope.org
+      ? requiredRolesByScope.org.some((role) => orgRoles.includes(role))
+      : true; // Default to true if no org roles are required
 
-    if (!hasAccess) {
+    const hasTeamAccess = requiredRolesByScope.team
+      ? requiredRolesByScope.team.some((role) => teamRoles.includes(role))
+      : true; // Default to true if no team roles are required
+
+    const hasSiteAccess = requiredRolesByScope.siteLevel
+      ? requiredRolesByScope.siteLevel.some((role) => siteRoles.includes(role))
+      : true; // Default to true if no site-level roles are required
+
+    // Grant access only if the user satisfies at least one scope's requirements
+    if (!hasOrgAccess && !hasTeamAccess && !hasSiteAccess) {
       throw new ApiError(
         403,
-        `You need one of the following roles to access this resource: ${requiredRoles.join(", ")}`
+        `You need one of the following roles to access this resource: 
+        Organization: ${requiredRolesByScope.org?.join(", ") || "None"}, 
+        Team: ${requiredRolesByScope.team?.join(", ") || "None"}, 
+        Site: ${requiredRolesByScope.siteLevel?.join(", ") || "None"}`
       );
     }
 
@@ -57,30 +70,4 @@ const checkRoles = (requiredRoles, scope = "org") => {
   });
 };
 
-const checkOrgRoles = (requiredRoles) => {
-  return asyncHandler((req, res, next) => {
-    const orgId = req.params.orgId || req.body.orgId;
-
-    const membership = req.user.organizationMemberships.find(
-      (m) => m.organizationId.toString() === orgId
-    );
-
-    if (!membership) {
-      throw new ApiError(403, "Access denied to the specified organization");
-    }
-
-    const hasAccess = requiredRoles.some((role) =>
-      membership.roles.includes(role)
-    );
-    if (!hasAccess) {
-      throw new ApiError(
-        403,
-        `You need one of the following roles to access this resource: ${requiredRoles.join(", ")}`
-      );
-    }
-
-    next();
-  });
-};
-
-export { verifyJWT, checkRoles, checkOrgRoles };
+export { verifyJWT, checkRoles };
