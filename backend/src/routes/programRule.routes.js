@@ -1,3 +1,4 @@
+// routes/programRule.routes.js
 import { Router } from "express";
 import {
   createProgramRule,
@@ -8,14 +9,12 @@ import {
 } from "../controllers/programRule.controller.js";
 import { verifyJWT, checkRoles } from "../middlewares/auth.middleware.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
+// now router.params.programId will be available
 
 router
-  .route("/program-rules")
-  .post(verifyJWT, checkRoles({ siteLevel: ["siteAdmin"] }), createProgramRule);
-
-router
-  .route("/compliance-programs/:id/rules")
+  .route("/")
+  .post(verifyJWT, checkRoles({ siteLevel: ["siteAdmin"] }), createProgramRule)
   .get(
     verifyJWT,
     checkRoles({ siteLevel: ["siteAdmin", "siteModerator"] }),
@@ -23,7 +22,7 @@ router
   );
 
 router
-  .route("/program-rules/:id")
+  .route("/:ruleId")
   .get(
     verifyJWT,
     checkRoles({ siteLevel: ["siteAdmin", "siteModerator"] }),

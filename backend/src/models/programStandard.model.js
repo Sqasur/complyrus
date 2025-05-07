@@ -40,6 +40,13 @@ const programStandardSchema = new Schema(
   { timestamps: true }
 );
 
+programStandardSchema.index(
+  { complianceProgramId: 1, label: 1 },
+  { unique: true }
+);
+
+programStandardSchema.index({ programRuleId: 1 });
+
 export const ProgramStandard = mongoose.model(
   "ProgramStandard",
   programStandardSchema

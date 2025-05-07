@@ -41,7 +41,10 @@ export const fetchAllCompliancePrograms = asyncHandler(async (req, res) => {
 export const fetchComplianceProgram = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const program = await ComplianceProgram.findById(id)
-    .populate("programRules")
+    .populate({
+      path: "programRules",
+      populate: { path: "programStandards" },
+    })
     .populate("programStandards");
   if (!program) throw new ApiError(404, "Program not found");
   res
@@ -52,9 +55,16 @@ export const fetchComplianceProgram = asyncHandler(async (req, res) => {
 // Update a compliance program
 export const updateComplianceProgram = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const updates = req.body;
 
-  const program = await ComplianceProgram.findByIdAndUpdate(id, updates, {
+  // Whitelist allowed fields
+  const allowedFields = (({ name, description, industry, isActive }) => ({
+    name,
+    description,
+    industry,
+    isActive,
+  }))(req.body);
+
+  const program = await ComplianceProgram.findByIdAndUpdate(id, allowedFields, {
     new: true,
   });
   if (!program) throw new ApiError(404, "Program not found");
@@ -64,8 +74,8 @@ export const updateComplianceProgram = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, program, "Program updated successfully"));
 });
 
-// Delete a compliance program (soft delete)
-export const deleteComplianceProgram = asyncHandler(async (req, res) => {
+// Deactivate a compliance program
+export const deactivateComplianceProgram = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const program = await ComplianceProgram.findByIdAndUpdate(
@@ -77,7 +87,38 @@ export const deleteComplianceProgram = asyncHandler(async (req, res) => {
 
   res
     .status(200)
-    .json(new ApiResponse(200, program, "Program deleted successfully"));
+    .json(new ApiResponse(200, program, "Program deactivated successfully"));
+});
+
+export const activateComplianceProgram = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const program = await ComplianceProgram.findByIdAndUpdate(
+    id,
+    { isActive: true },
+    { new: true }
+  );
+  if (!program) throw new ApiError(404, "Program not found");
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, program, "Program activated successfully"));
+});
+
+export const deleteComplianceProgram = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Delete related program rules and standards
+  await ProgramRule.deleteMany({ complianceProgramId: id });
+  await ProgramStandard.deleteMany({ complianceProgramId: id });
+
+  // Delete the compliance program
+  const program = await ComplianceProgram.findByIdAndDelete(id);
+  if (!program) throw new ApiError(404, "Program not found");
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Program deleted successfully"));
 });
 
 // Fetch program with nested rules and standards

@@ -1,3 +1,4 @@
+// routes/programStandard.routes.js
 import { Router } from "express";
 import {
   createProgramStandard,
@@ -9,18 +10,15 @@ import {
 } from "../controllers/programStandard.controller.js";
 import { verifyJWT, checkRoles } from "../middlewares/auth.middleware.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 router
-  .route("/program-standards")
+  .route("/")
   .post(
     verifyJWT,
     checkRoles({ siteLevel: ["siteAdmin"] }),
     createProgramStandard
-  );
-
-router
-  .route("/compliance-programs/:id/standards")
+  )
   .get(
     verifyJWT,
     checkRoles({ siteLevel: ["siteAdmin", "siteModerator"] }),
@@ -28,15 +26,7 @@ router
   );
 
 router
-  .route("/program-rules/:id/standards")
-  .get(
-    verifyJWT,
-    checkRoles({ siteLevel: ["siteAdmin", "siteModerator"] }),
-    fetchStandardsForRule
-  );
-
-router
-  .route("/program-standards/:id")
+  .route("/:standardId")
   .get(
     verifyJWT,
     checkRoles({ siteLevel: ["siteAdmin", "siteModerator"] }),

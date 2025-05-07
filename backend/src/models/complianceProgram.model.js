@@ -1,4 +1,6 @@
 import mongoose, { Schema } from "mongoose";
+import { ProgramStandard } from "./programStandard.model.js";
+import { ProgramRule } from "./programRule.model.js";
 
 const complianceProgramSchema = new Schema(
   {
@@ -39,6 +41,20 @@ const complianceProgramSchema = new Schema(
     ],
   },
   { timestamps: true }
+);
+
+complianceProgramSchema.pre("remove", async function () {
+  await ProgramStandard.deleteMany({ complianceProgramId: this._id });
+  await ProgramRule.deleteMany({ complianceProgramId: this._id });
+});
+
+complianceProgramSchema.pre(
+  "deleteOne",
+  { document: true, query: false },
+  async function () {
+    await ProgramStandard.deleteMany({ complianceProgramId: this._id });
+    await ProgramRule.deleteMany({ complianceProgramId: this._id });
+  }
 );
 
 export const ComplianceProgram = mongoose.model(
