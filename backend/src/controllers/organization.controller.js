@@ -26,12 +26,6 @@ export const createOrganization = asyncHandler(async (req, res) => {
     users: [{ userId: req.user._id, roles: ["orgOwner"] }],
   });
 
-  req.user.organizationMemberships.push({
-    organizationId: organization._id,
-    roles: ["orgOwner"],
-  });
-  await req.user.save();
-
   res
     .status(201)
     .json(
@@ -48,10 +42,7 @@ export const fetchAllOrganizations = asyncHandler(async (req, res) => {
     organizations = await Organization.find();
   } else {
     // Otherwise, fetch only the organizations the user is part of
-    const userOrgIds = req.user.organizationMemberships.map(
-      (m) => m.organizationId
-    );
-    organizations = await Organization.find({ _id: { $in: userOrgIds } });
+    organizations = await Organization.find({ "users.userId": req.user._id });
   }
 
   res
@@ -64,8 +55,9 @@ export const fetchAllOrganizations = asyncHandler(async (req, res) => {
 // Fetch organizations the current user is part of
 export const fetchUserOrganizations = asyncHandler(async (req, res) => {
   const organizations = await Organization.find({
-    _id: { $in: req.user.organizationMemberships.map((m) => m.organizationId) },
+    "users.userId": req.user._id,
   });
+
   res
     .status(200)
     .json(
@@ -139,12 +131,17 @@ export const addUserToOrganization = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Organization not found");
   }
 
+  // Check if the user is already a member
+  const isAlreadyMember = organization.users.some(
+    (u) => u.userId.toString() === userId
+  );
+
+  if (isAlreadyMember) {
+    throw new ApiError(400, "User is already a member of the organization");
+  }
+
   organization.users.push({ userId, roles });
   await organization.save();
-
-  const user = await User.findById(userId);
-  user.organizationMemberships.push({ organizationId: orgId, roles });
-  await user.save();
 
   res
     .status(200)
@@ -164,12 +161,6 @@ export const removeUserFromOrganization = asyncHandler(async (req, res) => {
     (u) => u.userId.toString() !== userId
   );
   await organization.save();
-
-  const user = await User.findById(userId);
-  user.organizationMemberships = user.organizationMemberships.filter(
-    (m) => m.organizationId.toString() !== orgId
-  );
-  await user.save();
 
   res
     .status(200)
@@ -257,10 +248,6 @@ export const addExistingUserToOrganization = asyncHandler(async (req, res) => {
   organization.users.push({ userId: user._id, roles });
   await organization.save();
 
-  // Add organization to user's memberships
-  user.organizationMemberships.push({ organizationId: orgId, roles });
-  await user.save();
-
   res
     .status(200)
     .json(new ApiResponse(200, {}, "User added to organization successfully"));
@@ -303,14 +290,11 @@ export const addNewUserToOrganization = asyncHandler(async (req, res) => {
     lastName,
     phoneNumber,
   });
+  await newUser.save();
 
   // Add the new user to the organization
   organization.users.push({ userId: newUser._id, roles });
   await organization.save();
-
-  // Add organization to the new user's memberships
-  newUser.organizationMemberships.push({ organizationId: orgId, roles });
-  await newUser.save();
 
   res
     .status(201)

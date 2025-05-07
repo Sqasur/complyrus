@@ -1,5 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
+import { Organization } from "../models/organization.model.js";
+import { Team } from "../models/team.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
@@ -81,13 +83,6 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  // getting ddata from request body
-  // username or email and password are required
-  // find user by username or email
-  // password check
-  // access and refresh token generation
-  // send cookies with tokens
-
   const { email, username, password } = req.body || {};
 
   if (!(email || username)) {
@@ -95,19 +90,39 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({ $or: [{ email }, { username }] });
-
   if (!user) {
     throw new ApiError(404, "User does not exist");
   }
 
   const isPasswordValid = await user.isPasswordCorrect(password);
-
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid User Credentials");
   }
 
+  // Fetch the user's first organization and team
+  const firstOrganization = await Organization.findOne({
+    "users.userId": user._id,
+  }).populate("teams");
+
+  const activeOrgId = firstOrganization?._id || null;
+  const activeOrgRoles =
+    firstOrganization?.users.find(
+      (orgUser) => orgUser.userId.toString() === user._id.toString()
+    )?.roles || [];
+
+  const firstTeam = firstOrganization?.teams[0];
+  const activeTeamId = firstTeam?._id || null;
+  const activeTeamRoles =
+    firstTeam?.members.find(
+      (teamMember) => teamMember.userId.toString() === user._id.toString()
+    )?.role || [];
+
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id
+    user._id,
+    activeOrgId,
+    activeOrgRoles,
+    activeTeamId,
+    activeTeamRoles
   );
 
   const loggedInUser = await User.findById(user._id).select(
@@ -140,7 +155,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      set: {
+      $set: {
         refreshToken: undefined,
       },
     },
@@ -160,10 +175,10 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefreshToken = (req.cookies.refreshToken =
+  const incomingRefreshToken =
     req.cookies.refreshToken ||
     req.body.refreshToken ||
-    req.headers("Authorization")?.replace("Bearer ", ""));
+    req.headers("Authorization")?.replace("Bearer ", "");
 
   if (!incomingRefreshToken) {
     throw new ApiError(401, "Unauthorized request");
@@ -175,7 +190,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = User.findById(decodedToken._id);
+    const user = await User.findById(decodedToken._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
@@ -190,19 +205,20 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       secure: true,
     };
 
-    const { accessToken, newRefreshToken } =
-      await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
 
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken, options)
+      .cookie("refreshToken", refreshToken, options)
       .json(
         new ApiResponse(
           200,
           {
             accessToken,
-            refreshToken: newRefreshToken,
+            refreshToken: refreshToken,
           },
           "Access token refreshed successfully"
         )
@@ -216,12 +232,14 @@ const switchOrganization = asyncHandler(async (req, res) => {
   const { orgId, teamId } = req.body;
   const userId = req.user._id;
 
-  const user = await User.findById(userId).populate(
-    "organizationMemberships.organizationId organizationMemberships.teams.teamId"
-  );
+  const organization = await Organization.findById(orgId).populate("teams");
+  if (!organization) {
+    throw new ApiError(404, "Organization not found");
+  }
 
-  const orgMembership = user.organizationMemberships.find(
-    (membership) => membership.organizationId._id.toString() === orgId
+  // Check if the user is part of the organization
+  const orgMembership = organization.users.find(
+    (orgUser) => orgUser.userId.toString() === userId.toString()
   );
 
   if (!orgMembership) {
@@ -232,8 +250,16 @@ const switchOrganization = asyncHandler(async (req, res) => {
 
   let activeTeamRoles = [];
   if (teamId) {
-    const teamMembership = orgMembership.teams.find(
-      (team) => team.teamId._id.toString() === teamId
+    const team = organization.teams.find(
+      (team) => team._id.toString() === teamId
+    );
+
+    if (!team) {
+      throw new ApiError(404, "Team not found in the specified organization");
+    }
+
+    const teamMembership = team.members.find(
+      (member) => member.userId.toString() === userId.toString()
     );
 
     if (!teamMembership) {
@@ -292,7 +318,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     throw new ApiError(400, "First name and last name are required");
   }
 
-  User.findByIdAndUpdate(
+  const updatedUser = await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: { firstName, lastName },
@@ -302,7 +328,9 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, {}, "Account details updated successfully"));
+    .json(
+      new ApiResponse(200, updatedUser, "Account details updated successfully")
+    );
 });
 
 export {
@@ -313,4 +341,5 @@ export {
   switchOrganization,
   changeCurrentPassword,
   getCurrentUser,
+  updateAccountDetails,
 };

@@ -23,7 +23,7 @@ export const createTeam = asyncHandler(async (req, res) => {
     name,
     description,
     organizationId: orgId,
-    members,
+    members, // Initialize the members array
     createdBy: req.user._id,
   });
 
@@ -43,26 +43,17 @@ export const addUserToTeam = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Team not found");
   }
 
-  const isAlreadyMember = team.members.some(
+  // Check if the user is already in the team
+  const isAlreadyInTeam = team.members.some(
     (member) => member.userId.toString() === userId
   );
-  if (isAlreadyMember) {
+
+  if (isAlreadyInTeam) {
     throw new ApiError(400, "User is already a member of the team");
   }
 
   team.members.push({ userId, role });
   await team.save();
-
-  const user = await User.findById(userId);
-  const orgMembership = user.organizationMemberships.find(
-    (membership) =>
-      membership.organizationId.toString() === team.organizationId.toString()
-  );
-
-  if (orgMembership) {
-    orgMembership.teams.push({ teamId: team._id, role });
-    await user.save();
-  }
 
   res
     .status(200)
@@ -78,23 +69,11 @@ export const removeUserFromTeam = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Team not found");
   }
 
+  // Remove the user from the team
   team.members = team.members.filter(
     (member) => member.userId.toString() !== userId
   );
   await team.save();
-
-  const user = await User.findById(userId);
-  const orgMembership = user.organizationMemberships.find(
-    (membership) =>
-      membership.organizationId.toString() === team.organizationId.toString()
-  );
-
-  if (orgMembership) {
-    orgMembership.teams = orgMembership.teams.filter(
-      (teamMembership) => teamMembership.teamId.toString() !== teamId
-    );
-    await user.save();
-  }
 
   res
     .status(200)
@@ -184,10 +163,16 @@ export const updateTeamDetails = asyncHandler(async (req, res) => {
 export const fetchAllTeamsInOrganization = asyncHandler(async (req, res) => {
   const { orgId } = req.params;
 
-  const teams = await Team.find({ organizationId: orgId });
+  const organization = await Organization.findById(orgId).populate("teams");
+  if (!organization) {
+    throw new ApiError(404, "Organization not found");
+  }
+
   res
     .status(200)
-    .json(new ApiResponse(200, teams, "Teams fetched successfully"));
+    .json(
+      new ApiResponse(200, organization.teams, "Teams fetched successfully")
+    );
 });
 
 // Fetch team members
@@ -209,23 +194,22 @@ export const fetchTeamMembers = asyncHandler(async (req, res) => {
 // Assign multiple users to a team
 export const assignMultipleUsersToTeam = asyncHandler(async (req, res) => {
   const { teamId } = req.params;
-  const { users } = req.body; // users: [{ userId, role }]
+  const { users } = req.body; // Array of user IDs and roles
 
   const team = await Team.findById(teamId);
   if (!team) {
     throw new ApiError(404, "Team not found");
   }
 
+  // Add users to the team if they are not already members
   users.forEach(({ userId, role }) => {
-    const isAlreadyMember = team.members.some(
-      (member) => member.userId.toString() === userId
-    );
-    if (!isAlreadyMember) {
+    if (!team.members.some((member) => member.userId.toString() === userId)) {
       team.members.push({ userId, role });
     }
   });
 
   await team.save();
+
   res
     .status(200)
     .json(new ApiResponse(200, {}, "Users assigned to team successfully"));
@@ -234,65 +218,41 @@ export const assignMultipleUsersToTeam = asyncHandler(async (req, res) => {
 // Remove multiple users from a team
 export const removeMultipleUsersFromTeam = asyncHandler(async (req, res) => {
   const { teamId } = req.params;
-  const { userIds } = req.body; // userIds: [userId1, userId2, ...]
+  const { userIds } = req.body; // Array of user IDs
 
   const team = await Team.findById(teamId);
   if (!team) {
     throw new ApiError(404, "Team not found");
   }
 
+  // Remove users from the team
   team.members = team.members.filter(
     (member) => !userIds.includes(member.userId.toString())
   );
-
   await team.save();
+
   res
     .status(200)
     .json(new ApiResponse(200, {}, "Users removed from team successfully"));
 });
 
-// Transfer team leadership
-export const transferTeamLeadership = asyncHandler(async (req, res) => {
-  const { teamId } = req.params;
-  const { newLeaderId } = req.body;
-
-  const team = await Team.findById(teamId);
-  if (!team) {
-    throw new ApiError(404, "Team not found");
-  }
-
-  const currentLeader = team.members.find(
-    (member) => member.role === "teamLeader"
-  );
-  const newLeader = team.members.find(
-    (member) => member.userId.toString() === newLeaderId
-  );
-
-  if (!newLeader) {
-    throw new ApiError(404, "New leader is not a member of the team");
-  }
-
-  if (currentLeader) {
-    currentLeader.role = "employee";
-  }
-  newLeader.role = "teamLeader";
-
-  await team.save();
-  res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Team leadership transferred successfully"));
-});
-
 // Delete a team
 export const deleteTeam = asyncHandler(async (req, res) => {
-  const { teamId } = req.params;
+  const { orgId, teamId } = req.params;
 
-  const team = await Team.findById(teamId);
+  const team = await Team.findByIdAndRemove(teamId);
   if (!team) {
     throw new ApiError(404, "Team not found");
   }
 
-  await team.remove();
+  const organization = await Organization.findById(orgId);
+  if (organization) {
+    organization.teams = organization.teams.filter(
+      (id) => id.toString() !== teamId
+    );
+    await organization.save();
+  }
+
   res.status(200).json(new ApiResponse(200, {}, "Team deleted successfully"));
 });
 

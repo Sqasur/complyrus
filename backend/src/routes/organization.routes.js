@@ -17,11 +17,11 @@ import { verifyJWT, checkRoles } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.route("/create").post(verifyJWT, createOrganization);
+router.route("/").post(verifyJWT, createOrganization);
 
 router.route("/").get(verifyJWT, fetchAllOrganizations);
 
-router.route("/your-organizations").get(verifyJWT, fetchUserOrganizations);
+router.route("/your").get(verifyJWT, fetchUserOrganizations);
 
 router
   .route("/:orgId")

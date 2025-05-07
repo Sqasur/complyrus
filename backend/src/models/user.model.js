@@ -42,34 +42,6 @@ const userSchema = new Schema(
       type: String,
       default: "https://example.com/default-avatar.png",
     },
-    organizationMemberships: [
-      {
-        organizationId: {
-          type: Schema.Types.ObjectId,
-          ref: "Organization",
-        },
-        roles: [
-          {
-            type: String,
-            enum: ["orgOwner", "orgAdmin", "teamLeader", "employee"],
-            default: "employee",
-          },
-        ],
-        teams: [
-          {
-            teamId: {
-              type: Schema.Types.ObjectId,
-              ref: "Team",
-            },
-            role: {
-              type: String,
-              enum: ["teamLeader", "employee"],
-              default: "employee",
-            },
-          },
-        ],
-      },
-    ],
     accountStatus: {
       type: String,
       enum: ["active", "inactive", "suspended"],
@@ -80,10 +52,6 @@ const userSchema = new Schema(
     },
     refreshToken: {
       type: String,
-    },
-    isSiteAdmin: {
-      type: Boolean,
-      default: false,
     },
     siteLevelRoles: [
       {
@@ -131,7 +99,7 @@ userSchema.methods.generateAccessToken = function (
 userSchema.methods.generateRefreshToken = function () {
   return jwt.sign(
     {
-      sub: this._id,
+      _id: this._id,
     },
     process.env.REFRESH_TOKEN_SECRET,
     {

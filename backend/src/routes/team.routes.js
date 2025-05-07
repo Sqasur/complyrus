@@ -11,7 +11,6 @@ import {
   fetchTeamMembers,
   assignMultipleUsersToTeam,
   removeMultipleUsersFromTeam,
-  transferTeamLeadership,
   fetchTeamsForUser,
 } from "../controllers/team.controller.js";
 import { verifyJWT, checkRoles } from "../middlewares/auth.middleware.js";
@@ -125,15 +124,6 @@ router
     }),
     removeMultipleUsersFromTeam
   );
-
-router.route("/:orgId/teams/:teamId/transfer-leadership").patch(
-  verifyJWT,
-  checkRoles({
-    siteLevel: ["siteAdmin", "siteModerator"],
-    org: ["orgOwner", "orgAdmin"],
-  }),
-  transferTeamLeadership
-);
 
 router.route("/:orgId/users/:userId/teams").get(
   verifyJWT,
