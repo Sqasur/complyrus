@@ -15,10 +15,16 @@ app.use(cookieParser());
 import userRouter from "./routes/user.routes.js";
 import organizationRouter from "./routes/organization.routes.js";
 import teamRouter from "./routes/team.routes.js";
+import complianceProgramRouter from "./routes/complianceProgram.routes.js";
+import programRuleRouter from "./routes/programRule.routes.js";
+import programStandardRouter from "./routes/programStandard.routes.js";
 
 // Use routes
 app.use("/api/v1/users", userRouter);
-app.use("/api/v1/", organizationRouter);
-app.use("/api/v1/", teamRouter);
+app.use("/api/v1/organizations", organizationRouter);
+app.use("/api/v1/organizations", teamRouter);
+app.use("/api/v1", complianceProgramRouter);
+app.use("/api/v1", programRuleRouter);
+app.use("/api/v1", programStandardRouter);
 
 export { app };
